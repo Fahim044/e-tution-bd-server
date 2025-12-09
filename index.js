@@ -25,24 +25,59 @@ async function run() {
   try {
     const db=client.db('E_Tution_BD_DB');
     const usersCollection=db.collection('users');
+    const tutionsCollection=db.collection('tutions');
 
     // Connect the client to the server	(optional starting in v4.7)
     await client.connect();
     // users api
+    app.get('/users',async(req,res)=>{
+        const query={};
+        const {email,role}=req.query;
+        if(email)
+        {
+            query.email=email;
+        }
+        if(role)
+        {
+            query.role=role
+        }
+        const options={sort:{createdAt:-1}};
+        const result=await usersCollection.find(query,options).toArray();
+        res.send(result);
+    });
     app.post('/users',async(req,res)=>{
         const userInfo=req.body;
         userInfo.createdAt=new Date().toLocaleString();
         const userEmail=userInfo.email;
-        console.log('user Email: ',userEmail);
+        // console.log('user Email: ',userEmail);
         const userExists=await usersCollection.findOne({email:userEmail});
-        console.log('userExists: ',userExists);
+        // console.log('userExists: ',userExists);
         if(userExists)
         {
             return res.send({message:'User Already exists.No need to save it again to the database'});
         }
         const result=await usersCollection.insertOne(userInfo);
         res.send(result);
-    })
+    });
+    // tutions api
+    app.get('/tutions',async(req,res)=>{
+        const query={};
+        const {email}=req.query;
+        if(email)
+        {
+            query.studentEmail=email;
+        }
+        const options={sort:{createdAt:-1}}
+        const result=await tutionsCollection.find(query,options).toArray();
+        res.send(result);
+    });
+    app.post('/tutions',async(req,res)=>{
+        const tutionInfo=req.body;
+        tutionInfo.createdAt=new Date().toLocaleString();
+        tutionInfo.status='pending';
+        const result=await tutionsCollection.insertOne(tutionInfo);
+        res.send(result);
+    });
     // Send a ping to confirm a successful connection
     await client.db("admin").command({ ping: 1 });
     console.log("Pinged your deployment. You successfully connected to MongoDB!");
