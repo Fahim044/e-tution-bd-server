@@ -2,7 +2,7 @@ const express = require('express');
 const cors = require('cors');
 require('dotenv').config();
 const app=express();
-const { MongoClient, ServerApiVersion } = require('mongodb');
+const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 app.use(express.json());
 app.use(cors());
 const port=process.env.PORT || 4000;
@@ -39,7 +39,7 @@ async function run() {
         }
         if(role)
         {
-            query.role=role
+            query.role=role;
         }
         const options={sort:{createdAt:-1}};
         const result=await usersCollection.find(query,options).toArray();
@@ -69,6 +69,34 @@ async function run() {
         }
         const options={sort:{createdAt:-1}}
         const result=await tutionsCollection.find(query,options).toArray();
+        res.send(result);
+    });
+    app.get('/tution/:id',async(req,res)=>{
+        const id=req.params.id;
+        const query={_id:new ObjectId(id)};
+        const result=await tutionsCollection.findOne(query);
+        res.send(result);
+    });
+    app.patch('/tution/:id',async(req,res)=>{
+        const id=req.params.id;
+        const updatedTutioninfo=req.body;
+        const query={_id:new ObjectId(id)};
+        const {updatedSubject,updatedStudentClass,updatedLocation,updatedBudget,updatedSchool,updatedDays,updatedTeachingTime,updatedStudentGender,updatedCurriculum,updatedDetails}=updatedTutioninfo;
+        const updatedDoc={
+            $set:{
+                subject:updatedSubject,
+                studentClass:updatedStudentClass,
+                location:updatedLocation,
+                budget:updatedBudget,
+                school:updatedSchool,
+                days:updatedDays,
+                teachingTime:updatedTeachingTime,
+                studentGender:updatedStudentGender,
+                curriculum:updatedCurriculum,
+                details:updatedDetails,
+            }
+        }
+        const result=await tutionsCollection.updateOne(query,updatedDoc);
         res.send(result);
     });
     app.post('/tutions',async(req,res)=>{
