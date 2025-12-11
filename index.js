@@ -59,6 +59,23 @@ async function run() {
         const result=await usersCollection.insertOne(userInfo);
         res.send(result);
     });
+
+app.patch('/users/:email',async(req,res)=>{
+    const email=req.params.email;
+    const query={email:email};
+    const updatedUserInfo=req.body;
+    const {displayName,photoURL,phoneNumber}=updatedUserInfo;
+    const updatedDoc={
+        $set:{
+            displayName,
+            photoURL,
+            phoneNumber
+        }
+    }
+    const result=await usersCollection.updateOne(query,updatedDoc);
+    res.send(result);
+});
+
     // tutions api
     app.get('/tutions',async(req,res)=>{
         const query={};
@@ -71,13 +88,13 @@ async function run() {
         const result=await tutionsCollection.find(query,options).toArray();
         res.send(result);
     });
-    app.get('/tution/:id',async(req,res)=>{
+    app.get('/tutions/:id',async(req,res)=>{
         const id=req.params.id;
         const query={_id:new ObjectId(id)};
         const result=await tutionsCollection.findOne(query);
         res.send(result);
     });
-    app.patch('/tution/:id',async(req,res)=>{
+    app.patch('/tutions/:id',async(req,res)=>{
         const id=req.params.id;
         const updatedTutioninfo=req.body;
         const query={_id:new ObjectId(id)};
@@ -99,11 +116,19 @@ async function run() {
         const result=await tutionsCollection.updateOne(query,updatedDoc);
         res.send(result);
     });
+
     app.post('/tutions',async(req,res)=>{
         const tutionInfo=req.body;
         tutionInfo.createdAt=new Date().toLocaleString();
         tutionInfo.status='pending';
         const result=await tutionsCollection.insertOne(tutionInfo);
+        res.send(result);
+    });
+
+    app.delete('/tutions/:id',async(req,res)=>{
+        const id=req.params.id;
+        const query={_id:new ObjectId(id)};
+        const result = await tutionsCollection.deleteOne(query);
         res.send(result);
     });
     // Send a ping to confirm a successful connection
