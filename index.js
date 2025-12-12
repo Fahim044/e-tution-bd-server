@@ -45,6 +45,14 @@ async function run() {
         const result=await usersCollection.find(query,options).toArray();
         res.send(result);
     });
+
+    app.get('/users/:email/role',async(req,res)=>{
+        const email=req.params.email;
+        const query={email};
+        const user=await usersCollection.findOne(query);
+        res.send({role:user?.role || 'student'});
+    })
+
     app.post('/users',async(req,res)=>{
         const userInfo=req.body;
         userInfo.createdAt=new Date().toLocaleString();
@@ -115,6 +123,19 @@ app.patch('/users/:email',async(req,res)=>{
                 details
             }
         }
+        const result=await tutionsCollection.updateOne(query,updatedDoc);
+        res.send(result);
+    });
+
+    app.patch('/tutions/:id/status',async(req,res)=>{
+        const {status}=req.body;
+        const id=req.params.id;
+        const query={_id:new ObjectId(id)};
+        const updatedDoc={
+            $set:{
+                status
+            }
+        };
         const result=await tutionsCollection.updateOne(query,updatedDoc);
         res.send(result);
     });
