@@ -78,6 +78,8 @@ app.patch('/users/:email',async(req,res)=>{
 
     // tutions api
     app.get('/tutions',async(req,res)=>{
+        const {limit}=req.query;
+
         const query={};
         const {email}=req.query;
         if(email)
@@ -85,7 +87,7 @@ app.patch('/users/:email',async(req,res)=>{
             query.studentEmail=email;
         }
         const options={sort:{createdAt:-1}}
-        const result=await tutionsCollection.find(query,options).toArray();
+        const result=await tutionsCollection.find(query,options).limit(Number(limit)).toArray();
         res.send(result);
     });
     app.get('/tutions/:id',async(req,res)=>{
@@ -98,19 +100,19 @@ app.patch('/users/:email',async(req,res)=>{
         const id=req.params.id;
         const updatedTutioninfo=req.body;
         const query={_id:new ObjectId(id)};
-        const {updatedSubject,updatedStudentClass,updatedLocation,updatedBudget,updatedSchool,updatedDays,updatedTeachingTime,updatedStudentGender,updatedCurriculum,updatedDetails}=updatedTutioninfo;
+        const {subject,studentClass,location,budget,school,days,teachingTime,studentGender,curriculum,details}=updatedTutioninfo;
         const updatedDoc={
             $set:{
-                subject:updatedSubject,
-                studentClass:updatedStudentClass,
-                location:updatedLocation,
-                budget:updatedBudget,
-                school:updatedSchool,
-                days:updatedDays,
-                teachingTime:updatedTeachingTime,
-                studentGender:updatedStudentGender,
-                curriculum:updatedCurriculum,
-                details:updatedDetails,
+                subject,
+                studentClass,
+                location,
+                budget,
+                school,
+                days,
+                teachingTime,
+                studentGender,
+                curriculum,
+                details
             }
         }
         const result=await tutionsCollection.updateOne(query,updatedDoc);
