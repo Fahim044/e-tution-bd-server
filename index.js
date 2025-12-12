@@ -86,13 +86,17 @@ app.patch('/users/:email',async(req,res)=>{
 
     // tutions api
     app.get('/tutions',async(req,res)=>{
-        const {limit}=req.query;
-
+        const {email,limit,status}=req.query;
+// console.log(req.query);
         const query={};
-        const {email}=req.query;
+        
         if(email)
         {
             query.studentEmail=email;
+        }
+        if(status)
+        {
+            query.status=status;
         }
         const options={sort:{createdAt:-1}}
         const result=await tutionsCollection.find(query,options).limit(Number(limit)).toArray();
