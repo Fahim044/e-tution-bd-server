@@ -84,6 +84,13 @@ app.patch('/users/:email',async(req,res)=>{
     res.send(result);
 });
 
+app.delete('/users/:id',async(req,res)=>{
+    const id=req.params.id;
+    const query={_id:new ObjectId(id)};
+    const result=await usersCollection.deleteOne(query);
+    res.send(result);
+});
+
     // tutions api
     app.get('/tutions',async(req,res)=>{
         const {email,limit,status}=req.query;
