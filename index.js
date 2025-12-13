@@ -26,6 +26,7 @@ async function run() {
     const db=client.db('E_Tution_BD_DB');
     const usersCollection=db.collection('users');
     const tutionsCollection=db.collection('tutions');
+    const tutorReqCollection=db.collection('tutorRequests');
 
     // Connect the client to the server	(optional starting in v4.7)
     await client.connect();
@@ -167,6 +168,67 @@ app.delete('/users/:id',async(req,res)=>{
         tutionInfo.createdAt=new Date().toLocaleString();
         tutionInfo.status='pending';
         const result=await tutionsCollection.insertOne(tutionInfo);
+        res.send(result);
+    });
+
+    app.get('/tutor-requests',async(req,res)=>{
+        const {tutionId,tutorEmail}=req.query;
+        const query={};
+        if(tutionId)
+        {
+            query.tutionId=tutionId;
+        }
+        if(tutorEmail)
+        {
+            query.tutorEmail=tutorEmail;
+        }
+       
+        const result=await tutorReqCollection.find(query).toArray();
+        res.send(result);
+
+    });
+
+    app.post('/tutor-requests',async(req,res)=>{
+    const tutorRequest=req.body;
+    const {tutionId,tutorEmail}=tutorRequest;
+    const tution=await tutionsCollection.findOne({_id:new ObjectId(tutionId)});
+    if(!tution)
+    {
+        return res.status(404).send({message:'Tution not found'});
+    }
+    tutorRequest.studentEmail=tution.studentEmail;
+    tutorRequest.appliedAt=new Date().toLocaleString();
+    tutorRequest.status='pending';
+
+    // validate if that tutor's application already exists or not
+    const tutorReqExists=await tutorReqCollection.findOne({tutionId,tutorEmail});
+    
+    if(tutorReqExists)
+    {
+        return res.status(409).send({message:'Tutor Already Applied'});
+    }
+
+
+    const result = await tutorReqCollection.insertOne(tutorRequest);
+        res.send(result);
+    });
+
+    app.patch('/tutor-requests/:id',async(req,res)=>{
+        const updatedInfo=req.body;
+        const id=req.params.id;
+      
+        const query={_id:new ObjectId(id)};
+        const updatedDoc={
+            $set:{...updatedInfo}
+        };
+        const result=await tutorReqCollection.updateOne(query,updatedDoc);
+        res.send(result);
+    });
+    
+    app.delete('/tutor-requests/:id',async(req,res)=>{
+        const id=req.params.id;
+        const query={_id:new ObjectId(id)};
+        const result=await tutorReqCollection.deleteOne(query);
         res.send(result);
     });
 
