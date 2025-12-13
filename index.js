@@ -172,7 +172,7 @@ app.delete('/users/:id',async(req,res)=>{
     });
 
     app.get('/tutor-requests',async(req,res)=>{
-        const {tutionId,tutorEmail}=req.query;
+        const {tutionId,tutorEmail,studentEmail,status}=req.query;
         const query={};
         if(tutionId)
         {
@@ -181,6 +181,14 @@ app.delete('/users/:id',async(req,res)=>{
         if(tutorEmail)
         {
             query.tutorEmail=tutorEmail;
+        }
+        if(studentEmail)
+        {
+            query.studentEmail=studentEmail;
+        }
+        if(status)
+        {
+            query.status=status;
         }
        
         const result=await tutorReqCollection.find(query).toArray();
@@ -224,7 +232,18 @@ app.delete('/users/:id',async(req,res)=>{
         const result=await tutorReqCollection.updateOne(query,updatedDoc);
         res.send(result);
     });
-    
+
+    app.patch('/tutor-requests/:id/status',async(req,res)=>{
+        const {status}=req.body;
+        const id=req.params.id;
+        const query={_id:new ObjectId(id)};
+        const updatedDoc={
+            $set:{status}
+        };
+        const result=await tutorReqCollection.updateOne(query,updatedDoc);
+        res.send(result);
+    });
+
     app.delete('/tutor-requests/:id',async(req,res)=>{
         const id=req.params.id;
         const query={_id:new ObjectId(id)};
