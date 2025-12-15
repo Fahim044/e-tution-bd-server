@@ -105,7 +105,7 @@ app.delete('/users/:id',async(req,res)=>{
 
     // tutions api
     app.get('/tutions',async(req,res)=>{
-        const {email,limit,status}=req.query;
+        const {email,limit,status,searchText}=req.query;
 // console.log(req.query);
         const query={};
         
@@ -116,6 +116,14 @@ app.delete('/users/:id',async(req,res)=>{
         if(status)
         {
             query.status=status;
+        }
+        if(searchText)
+        {
+            // query.subject=searchText;
+            query.$or=[
+                {subject:{$regex:searchText,$options:'i'}},
+                {location:{$regex:searchText,$options:'i'}}
+            ]
         }
         const options={sort:{createdAt:-1}}
         const result=await tutionsCollection.find(query,options).limit(Number(limit)).toArray();
