@@ -105,8 +105,11 @@ app.delete('/users/:id',async(req,res)=>{
 
     // tutions api
     app.get('/tutions',async(req,res)=>{
-        const {email,limit,status,searchText}=req.query;
+        const {email,limit,status,searchText,sort='createdAt',order='desc'}=req.query;
 // console.log(req.query);
+const sortOption={};
+sortOption[sort || 'createdAt']=order==='asc'? 1: -1;
+// console.log(sortOption);
         const query={};
         
         if(email)
@@ -126,7 +129,7 @@ app.delete('/users/:id',async(req,res)=>{
             ]
         }
         const options={sort:{createdAt:-1}}
-        const result=await tutionsCollection.find(query,options).limit(Number(limit)).toArray();
+        const result=await tutionsCollection.find(query,options).sort(sortOption).limit(Number(limit)).toArray();
         res.send(result);
     });
     app.get('/tutions/:id',async(req,res)=>{
