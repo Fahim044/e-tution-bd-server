@@ -6,6 +6,38 @@ const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 app.use(express.json());
 app.use(cors());
 const port=process.env.PORT || 4000;
+
+
+const admin = require("firebase-admin");
+
+const serviceAccount = require("./e-tution-bd-4005d-firebase-adminsdk-fbsvc-c2d585f529.json");
+
+admin.initializeApp({
+  credential: admin.credential.cert(serviceAccount)
+});
+
+
+const verifyFBToken=async(req,res,next)=>{
+    const token=req.headers.authorization;
+    if(!token)
+    {
+        return res.status(401).send({message:'Unauthorized Token'});
+    }
+    try{
+        const idToken=token.split(' ')[1];
+        const decoded=await admin.auth().verifyIdToken(idToken);
+        // console.log(decoded);
+        req.decoded_email=decoded.email;
+    next();
+
+    }
+    catch(error)
+    {
+        return res.status(401).send({message:'Unauthorized Access'});
+    }
+    // console.log(token);
+}
+
 const uri = `mongodb+srv://${process.env.db_username}:${process.env.db_password}@cluster0.gpbclj8.mongodb.net/?appName=Cluster0`;
 
 // Create a MongoClient with a MongoClientOptions object to set the Stable API version
@@ -28,15 +60,63 @@ async function run() {
     const tutionsCollection=db.collection('tutions');
     const tutorReqCollection=db.collection('tutorRequests');
 
+    const verifyAdmin=async(req,res,next)=>{
+        const email=req.decoded_email;
+        const query={email};
+        const user=await usersCollection.findOne(query);
+        if(!user || user.role!=='admin')
+        {
+            return res.status(403).send({message:'Forbidden Access'});
+        }
+        next();
+    }
+
+    const verifyTutor=async(req,res,next)=>{
+        const email=req.decoded_email;
+        const query={email};
+        const user=await usersCollection.findOne(query);
+        if(!user || user.role!=='tutor')
+        {
+            return res.status(403).send({message:'Forbidden Access'});
+        }
+        next();
+    }
+    const verifyStudent=async(req,res,next)=>{
+        const email=req.decoded_email;
+        const query={email};
+        const user=await usersCollection.findOne(query);
+        if(!user || user.role!=='student')
+        {
+            return res.status(403).send({message:'Forbidden Access'});
+        }
+        next();
+    }
+
     // Connect the client to the server	(optional starting in v4.7)
     await client.connect();
     // users api
-    app.get('/users',async(req,res)=>{
+    app.get('/public/users',async(req,res)=>{
+        const query={};
+        const {role}=req.query;
+        if(role)
+        {
+            query.role=role;
+        }
+        const options={sort:{createdAt:-1}};
+        const result=await usersCollection.find(query,options).toArray();
+        res.send(result);
+    });
+
+    app.get('/users',verifyFBToken,verifyAdmin,async(req,res)=>{
         const query={};
         const {email,role}=req.query;
         if(email)
         {
             query.email=email;
+            if(email !== req.decoded_email)
+            {
+                return res.status(403).send({message:'Forbidden Access'});
+            }
         }
         if(role)
         {
@@ -47,14 +127,28 @@ async function run() {
         res.send(result);
     });
 
-    app.get('/users/:email/role',async(req,res)=>{
+    // it is for updating user's own profile,so ,no verification of role is applied here
+    app.get('/users/:id',verifyFBToken,async(req,res)=>{
+        const id=req.params.id;
+        const query={_id:new ObjectId(id)};
+        const result=await usersCollection.findOne(query);
+        res.send(result);
+    });
+
+    // it is applied in useRole,so,as it is for extracting user's role,so,here,verification of role is not applied
+    app.get('/users/:email/role',verifyFBToken,async(req,res)=>{
         const email=req.params.email;
         const query={email};
+        if(email!==req.decoded_email)
+        {
+            return res.status(403).send({message:'Forbidden Access'});
+        }
         const user=await usersCollection.findOne(query);
         res.send({role:user?.role || 'student'});
     })
 
-    app.post('/users',async(req,res)=>{
+    // here,all the users who will register in this application,this api is for it.so,verification of role is not applied
+    app.post('/users',verifyFBToken,async(req,res)=>{
         const userInfo=req.body;
         userInfo.createdAt=new Date().toLocaleString();
         const userEmail=userInfo.email;
@@ -69,7 +163,7 @@ async function run() {
         res.send(result);
     });
 
-app.patch('/users/:email',async(req,res)=>{
+app.patch('/users/:email',verifyFBToken,verifyAdmin,async(req,res)=>{
     const email=req.params.email;
     const query={email:email};
     const updatedUserInfo=req.body;
@@ -85,7 +179,7 @@ app.patch('/users/:email',async(req,res)=>{
     res.send(result);
 });
 
-app.patch('/users/:id/role',async(req,res)=>{
+app.patch('/users/:id/role',verifyFBToken,verifyAdmin,async(req,res)=>{
     const id=req.params.id;
     const {role}=req.body;
     const query={_id:new ObjectId(id)};
@@ -96,7 +190,7 @@ app.patch('/users/:id/role',async(req,res)=>{
     res.send(result);
 });
 
-app.delete('/users/:id',async(req,res)=>{
+app.delete('/users/:id',verifyFBToken,verifyAdmin,async(req,res)=>{
     const id=req.params.id;
     const query={_id:new ObjectId(id)};
     const result=await usersCollection.deleteOne(query);
@@ -104,18 +198,12 @@ app.delete('/users/:id',async(req,res)=>{
 });
 
     // tutions api
-    app.get('/tutions',async(req,res)=>{
-        const {email,limit=0,skip=0,status,searchText,sort='createdAt',order='desc'}=req.query;
-// console.log(req.query);
-const sortOption={};
-sortOption[sort || 'createdAt']=order==='asc'? 1: -1;
-// console.log(sortOption);
+    // public for all
+    app.get('/public/tutions',async(req,res)=>{
+        const {limit=0,skip=0,searchText,sort='createdAt',order='desc',status}=req.query;
+        const sortOption={};
+        sortOption[sort || 'createdAt']=order==='asc'?1 : -1;
         const query={};
-        
-        if(email)
-        {
-            query.studentEmail=email;
-        }
         if(status)
         {
             query.status=status;
@@ -133,13 +221,59 @@ sortOption[sort || 'createdAt']=order==='asc'? 1: -1;
         const tutions=await tutionsCollection.find(query,options).sort(sortOption).limit(Number(limit)).skip(Number(skip)).toArray();
         res.send({tutions,total:count});
     });
-    app.get('/tutions/:id',async(req,res)=>{
+
+    // from server side,it is taking the decision,who will see what
+    app.get('/tutions',verifyFBToken,async(req,res)=>{
+        // const {status,}=req.query;
+        const email=req.decoded_email;
+// limit=0,skip=0,sort='createdAt',order='desc',searchText,email
+// console.log(req.query);
+// const sortOption={};
+// sortOption[sort || 'createdAt']=order==='asc'? 1: -1;
+// console.log(sortOption);
+
+const user=await usersCollection.findOne({email});
+if(!user)
+{
+    return res.status(403).send({message:'Forbidden Access'});
+}
+
+        const query={};
+        
+        if(user.role==='student')
+        {
+            query.studentEmail=email;
+        }
+        // if(status)
+        // {
+        //     query.status=status;
+        // }
+        // if(searchText)
+        // {
+        //     // query.subject=searchText;
+        //     query.$or=[
+        //         {subject:{$regex:searchText,$options:'i'}},
+        //         {location:{$regex:searchText,$options:'i'}}
+        //     ]
+        // }
+        // const count=await tutionsCollection.countDocuments(query);
+
+        // .sort(sortOption).limit(Number(limit)).skip(Number(skip))
+        const options={sort:{createdAt:-1}};
+    const tutions=await tutionsCollection.find(query,options).toArray();
+        res.send(tutions);
+        // {tutions,total:count}
+    });
+
+    //since this is for tution details,so anyone can see.so,no verification of role is applied here 
+    app.get('/tutions/:id',verifyFBToken,async(req,res)=>{
         const id=req.params.id;
         const query={_id:new ObjectId(id)};
         const result=await tutionsCollection.findOne(query);
         res.send(result);
     });
-    app.patch('/tutions/:id',async(req,res)=>{
+
+    app.patch('/tutions/:id',verifyFBToken,verifyStudent,async(req,res)=>{
         const id=req.params.id;
         const updatedTutioninfo=req.body;
         const query={_id:new ObjectId(id)};
@@ -162,7 +296,7 @@ sortOption[sort || 'createdAt']=order==='asc'? 1: -1;
         res.send(result);
     });
 
-    app.patch('/tutions/:id/status',async(req,res)=>{
+    app.patch('/tutions/:id/status',verifyFBToken,verifyAdmin,async(req,res)=>{
         const {status}=req.body;
         const id=req.params.id;
         const query={_id:new ObjectId(id)};
@@ -175,7 +309,7 @@ sortOption[sort || 'createdAt']=order==='asc'? 1: -1;
         res.send(result);
     });
 
-    app.post('/tutions',async(req,res)=>{
+    app.post('/tutions',verifyFBToken,verifyStudent,async(req,res)=>{
         const tutionInfo=req.body;
         tutionInfo.createdAt=new Date().toLocaleString();
         tutionInfo.status='pending';
@@ -183,21 +317,41 @@ sortOption[sort || 'createdAt']=order==='asc'? 1: -1;
         res.send(result);
     });
 
-    app.get('/tutor-requests',async(req,res)=>{
-        const {tutionId,tutorEmail,studentEmail,status}=req.query;
+    // from server side,it is taking the decision,who will see what
+    app.get('/tutor-requests',verifyFBToken,async(req,res)=>{
+        const email=req.decoded_email;
+        const user=await usersCollection.findOne({email});
+        if(!user)
+        {
+            return res.status(403).send({message:'Forbidden Access'});
+        }
         const query={};
+        if(user.role==='tutor')
+        {
+            query.tutorEmail=email;
+        }
+        const {tutionId,status}=req.query;
+        // ,tutorEmail,studentEmail
         if(tutionId)
         {
             query.tutionId=tutionId;
         }
-        if(tutorEmail)
+        // if(tutorEmail)
+        // {
+        //     query.tutorEmail=tutorEmail;
+        // }
+        if(user.role==='student')
         {
-            query.tutorEmail=tutorEmail;
+            query.studentEmail=email;
         }
-        if(studentEmail)
-        {
-            query.studentEmail=studentEmail;
-        }
+        // if(studentEmail)
+        // {
+        //     query.studentEmail=studentEmail;
+        //     if(studentEmail!==req.decoded_email)
+        //     {
+        //         return res.status(403).send({message:'Forbidden Access'});
+        //     }
+        // }
         if(status)
         {
             query.status=status;
@@ -208,7 +362,7 @@ sortOption[sort || 'createdAt']=order==='asc'? 1: -1;
 
     });
 
-    app.post('/tutor-requests',async(req,res)=>{
+    app.post('/tutor-requests',verifyFBToken,verifyTutor,async(req,res)=>{
     const tutorRequest=req.body;
     const {tutionId,tutorEmail}=tutorRequest;
     const tution=await tutionsCollection.findOne({_id:new ObjectId(tutionId)});
@@ -233,7 +387,7 @@ sortOption[sort || 'createdAt']=order==='asc'? 1: -1;
         res.send(result);
     });
 
-    app.patch('/tutor-requests/:id',async(req,res)=>{
+    app.patch('/tutor-requests/:id',verifyFBToken,verifyTutor,async(req,res)=>{
         const updatedInfo=req.body;
         const id=req.params.id;
       
@@ -245,7 +399,7 @@ sortOption[sort || 'createdAt']=order==='asc'? 1: -1;
         res.send(result);
     });
 
-    app.patch('/tutor-requests/:id/status',async(req,res)=>{
+    app.patch('/tutor-requests/:id/status',verifyFBToken,verifyStudent,async(req,res)=>{
         const {status}=req.body;
         const id=req.params.id;
         const query={_id:new ObjectId(id)};
@@ -256,14 +410,14 @@ sortOption[sort || 'createdAt']=order==='asc'? 1: -1;
         res.send(result);
     });
 
-    app.delete('/tutor-requests/:id',async(req,res)=>{
+    app.delete('/tutor-requests/:id',verifyFBToken,verifyTutor,async(req,res)=>{
         const id=req.params.id;
         const query={_id:new ObjectId(id)};
         const result=await tutorReqCollection.deleteOne(query);
         res.send(result);
     });
 
-    app.delete('/tutions/:id',async(req,res)=>{
+    app.delete('/tutions/:id',verifyFBToken,verifyStudent,async(req,res)=>{
         const id=req.params.id;
         const query={_id:new ObjectId(id)};
         const result = await tutionsCollection.deleteOne(query);
