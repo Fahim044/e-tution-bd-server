@@ -11,7 +11,9 @@ const port=process.env.PORT || 4000;
 
 const admin = require("firebase-admin");
 
-const serviceAccount = require("./e-tution-bd-4005d-firebase-adminsdk-fbsvc-c2d585f529.json");
+// const serviceAccount = require("./e-tution-bd-4005d-firebase-adminsdk-fbsvc-c2d585f529.json");
+const decoded = Buffer.from(process.env.FB_SERVICE_KEY, 'base64').toString('utf8')
+const serviceAccount = JSON.parse(decoded);
 
 admin.initializeApp({
   credential: admin.credential.cert(serviceAccount)
@@ -95,7 +97,7 @@ async function run() {
     }
 
     // Connect the client to the server	(optional starting in v4.7)
-    await client.connect();
+    // await client.connect();
     // users api
     app.get('/public/users',async(req,res)=>{
         const query={};
@@ -543,8 +545,8 @@ if(!user)
     });
 
     // Send a ping to confirm a successful connection
-    await client.db("admin").command({ ping: 1 });
-    console.log("Pinged your deployment. You successfully connected to MongoDB!");
+    // await client.db("admin").command({ ping: 1 });
+    // console.log("Pinged your deployment. You successfully connected to MongoDB!");
   } finally {
     // Ensures that the client will close when you finish/error
     // await client.close();

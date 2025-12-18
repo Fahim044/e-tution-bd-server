@@ -1,3 +1,4 @@
 node_modules
 .env
 e-tution-bd-4005d-firebase-adminsdk-fbsvc-c2d585f529.json
+.vercel
