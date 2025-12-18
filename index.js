@@ -152,7 +152,7 @@ async function run() {
     })
 
     // here,all the users who will register in this application,this api is for it.so,verification of role is not applied
-    app.post('/users',verifyFBToken,async(req,res)=>{
+    app.post('/users',async(req,res)=>{
         const userInfo=req.body;
         userInfo.createdAt=new Date().toLocaleString();
         const userEmail=userInfo.email;
@@ -167,7 +167,7 @@ async function run() {
         res.send(result);
     });
 
-app.patch('/users/:email',verifyFBToken,verifyAdmin,async(req,res)=>{
+app.patch('/users/:email',verifyFBToken,async(req,res)=>{
     const email=req.params.email;
     const query={email:email};
     const updatedUserInfo=req.body;
@@ -337,7 +337,10 @@ if(!user)
     // from server side,it is taking the decision,who will see what
     app.get('/tutor-requests',verifyFBToken,async(req,res)=>{
         const email=req.decoded_email;
+        console.log(email);
+        
         const user=await usersCollection.findOne({email});
+        console.log(user);
         if(!user)
         {
             return res.status(403).send({message:'Forbidden Access'});
