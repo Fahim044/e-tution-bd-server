@@ -3,6 +3,7 @@ const cors = require('cors');
 require('dotenv').config();
 const app=express();
 const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
+const stripe = require('stripe')(process.env.STRIPE_SECRET);
 app.use(express.json());
 app.use(cors());
 const port=process.env.PORT || 4000;
@@ -59,6 +60,7 @@ async function run() {
     const usersCollection=db.collection('users');
     const tutionsCollection=db.collection('tutions');
     const tutorReqCollection=db.collection('tutorRequests');
+    const paymentsCollection=db.collection('payments');
 
     const verifyAdmin=async(req,res,next)=>{
         const email=req.decoded_email;
@@ -200,7 +202,7 @@ app.delete('/users/:id',verifyFBToken,verifyAdmin,async(req,res)=>{
     // tutions api
     // public for all
     app.get('/public/tutions',async(req,res)=>{
-        const {limit=0,skip=0,searchText,sort='createdAt',order='desc',status}=req.query;
+        const {subject,studentClass,location,limit=0,skip=0,searchText,sort='createdAt',order='desc',status}=req.query;
         const sortOption={};
         sortOption[sort || 'createdAt']=order==='asc'?1 : -1;
         const query={};
@@ -216,6 +218,19 @@ app.delete('/users/:id',verifyFBToken,verifyAdmin,async(req,res)=>{
                 {location:{$regex:searchText,$options:'i'}}
             ]
         }
+        if(subject)
+        {
+            query.subject=subject;
+        }
+        if(studentClass)
+        {
+            query.studentClass=studentClass;
+        }
+        if(location)
+        {
+            query.location={$regex:location,$options:'i'};
+        }
+        console.log(req.query);
         const count=await tutionsCollection.countDocuments(query);
         const options={sort:{createdAt:-1}};
         const tutions=await tutionsCollection.find(query,options).sort(sortOption).limit(Number(limit)).skip(Number(skip)).toArray();
@@ -357,7 +372,7 @@ if(!user)
             query.status=status;
         }
        
-        const result=await tutorReqCollection.find(query).toArray();
+        const result=await tutorReqCollection.find(query).sort({appliedAt:-1}).toArray();
         res.send(result);
 
     });
@@ -399,6 +414,7 @@ if(!user)
         res.send(result);
     });
 
+    // this should be used only for reject a tutor request,because,to approve,it is handled by stripe.
     app.patch('/tutor-requests/:id/status',verifyFBToken,verifyStudent,async(req,res)=>{
         const {status}=req.body;
         const id=req.params.id;
@@ -423,6 +439,109 @@ if(!user)
         const result = await tutionsCollection.deleteOne(query);
         res.send(result);
     });
+
+    // stripe payment:
+    app.post('/payment-checkout-session',verifyFBToken,verifyStudent,async(req,res)=>{
+        const paymentInfo=req.body;
+        const amount=parseInt(paymentInfo.cost)*100;
+        const session=await stripe.checkout.sessions.create({
+            line_items:[
+                {
+                    price_data:{
+                        currency:'BDT',
+                        unit_amount:amount,
+                        product_data:{
+                            name:paymentInfo.tutorName
+                        }
+                    },
+                    quantity:1
+                }
+            ],
+            customer_email:paymentInfo.studentEmail,
+            mode:'payment',
+            metadata:{
+                tutorReqId:paymentInfo.tutorReqId,
+                tutionId:paymentInfo.tutionId,
+                tutorName:paymentInfo.tutorName,
+                tutorEmail:paymentInfo.tutorEmail
+            },
+            success_url:`${process.env.SITE_DOMAIN}/dashboard/payment-success?session_id={CHECKOUT_SESSION_ID}`,
+            cancel_url:`${process.env.SITE_DOMAIN}/dashboard/payment-cancelled`
+        })
+        res.send({url:session.url});
+    });
+
+    app.patch('/payment-success',verifyFBToken,verifyStudent,async(req,res)=>{
+        const sessionId=req.query.session_id;
+        const session=await stripe.checkout.sessions.retrieve(sessionId);
+        const transactionId= session.payment_intent;
+        const query={transactionId};
+        const paymentExists=await paymentsCollection.findOne(query);
+        if(paymentExists)
+        {
+            return res.send({
+                message:'Already Exists',
+                transactionId
+            });
+        }
+        if(session.payment_status==='paid')
+        {
+            const id=session.metadata.tutorReqId;
+            const query={_id:new ObjectId(id)};
+            const update={
+                $set:{
+                    paymentStatus:'paid',
+                    status:'approved'
+                }
+            };
+            const result=await tutorReqCollection.updateOne(query,update);
+            
+            const payment={
+                amount:session.amount_total/100,
+                currency:session.currency,
+                studentEmail:session.customer_email,
+                tutorReqId:session.metadata.tutorReqId,
+                tutionId:session.metadata.tutionId,
+                tutorName:session.metadata.tutorName,
+                tutorEmail:session.metadata.tutorEmail,
+                transactionId:session.payment_intent,
+                paymentStatus:session.payment_status,
+                paidAt:new Date().toLocaleString(),
+
+            };
+            const resultPayment=await paymentsCollection.insertOne(payment);
+            return res.send({
+                success:true,
+                transactionId:session.payment_intent,
+                modifyTution:result,
+                paymentInfo:resultPayment
+            });
+
+        }
+        return res.send({success:false});
+    });
+
+    app.get('/payments',verifyFBToken,async(req,res)=>{
+        const email=req.decoded_email;
+        const user=await usersCollection.findOne({email});
+        if(!user)
+        {
+            return res.status(403).send({message:'Forbidden Access'});
+        }
+        const query={};
+        if(user.role==='student')
+        {
+            query.studentEmail=email;
+        }
+        if(user.role==='tutor')
+        {
+            query.tutorEmail=email;
+        }
+        const options={sort:{paidAt:-1}};
+        const result=await paymentsCollection.find(query,options).toArray();
+        res.send(result);
+    });
+
     // Send a ping to confirm a successful connection
     await client.db("admin").command({ ping: 1 });
     console.log("Pinged your deployment. You successfully connected to MongoDB!");
